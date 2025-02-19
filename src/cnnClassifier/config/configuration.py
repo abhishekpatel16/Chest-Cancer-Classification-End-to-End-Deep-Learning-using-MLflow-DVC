@@ -1,25 +1,37 @@
 import os
+from pathlib import Path
 from cnnClassifier.constants import *
 from cnnClassifier.utils.common import read_yaml, create_directories
 from cnnClassifier.entity.config_entity import (DataIngestionConfig,
                                                 PrepareBaseModelConfig,
-                                                TrainingConfig
-                                                )
+                                                TrainingConfig,
+                                                EvaluationConfig)
+from dotenv import load_dotenv
+
+
+def setup_mlflow():
+    """Loads environment variables and sets up MLflow tracking."""
+    load_dotenv()  # Load variables from .env file
+
+    os.environ["MLFLOW_TRACKING_URI"] = os.getenv("MLFLOW_TRACKING_URI")
+    os.environ["MLFLOW_TRACKING_USERNAME"] = os.getenv("MLFLOW_TRACKING_USERNAME")
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.getenv("MLFLOW_TRACKING_PASSWORD")
 
 
 class ConfigurationManager:
     def __init__(
         self,
-        config_filepath = CONFIG_FILE_PATH,
-        params_filepath = PARAMS_FILE_PATH):
+        config_filepath=CONFIG_FILE_PATH,
+        params_filepath=PARAMS_FILE_PATH):
 
         self.config = read_yaml(config_filepath)
         self.params = read_yaml(params_filepath)
 
         create_directories([self.config.artifacts_root])
 
+        # ✅ Setup MLflow when ConfigurationManager is created
+        setup_mlflow()
 
-    
     def get_data_ingestion_config(self) -> DataIngestionConfig:
         config = self.config.data_ingestion
 
@@ -29,15 +41,14 @@ class ConfigurationManager:
             root_dir=config.root_dir,
             source_URL=config.source_URL,
             local_data_file=config.local_data_file,
-            unzip_dir=config.unzip_dir 
+            unzip_dir=config.unzip_dir
         )
 
         return data_ingestion_config
-    
 
     def get_prepare_base_model_config(self) -> PrepareBaseModelConfig:
         config = self.config.prepare_base_model
-        
+
         create_directories([config.root_dir])
 
         prepare_base_model_config = PrepareBaseModelConfig(
@@ -52,8 +63,6 @@ class ConfigurationManager:
         )
 
         return prepare_base_model_config
-    
-
 
     def get_training_config(self) -> TrainingConfig:
         training = self.config.training
@@ -76,5 +85,14 @@ class ConfigurationManager:
         )
 
         return training_config
-    
 
+    def get_evaluation_config(self) -> EvaluationConfig:
+        eval_config = EvaluationConfig(
+            path_of_model="artifacts/training/model.h5",
+            training_data="artifacts/data_ingestion/Chest-CT-Scan-data",
+            mlflow_uri=os.getenv("MLFLOW_TRACKING_URI"),  # ✅ Load from .env
+            all_params=self.params,
+            params_image_size=self.params.IMAGE_SIZE,
+            params_batch_size=self.params.BATCH_SIZE
+        )
+        return eval_config
